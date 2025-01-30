@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Russian Roulette</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            transition: background-color 0.5s ease; /*Smooth transition for background color*/
+        }
+        button {
+            padding: 20px 40px;
+            font-size: 24px;
+            margin-top: 20px;
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: default;
+        }
+        #result {
+            font-size: 20px;
+            margin-top: 20px;
+        }
+        #waiting {
+            display: none;
+            font-style: italic;
+            color: gray;
+        }
+        #odds {
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            background-color: #f0f0f0;
+            text-align: center;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .green-bg {
+            background-color: #90ee90;
+        }
+        .red-bg {
+            background-color: #ffcccb;
+        }
+    </style>
+</head>
+<body>
+    <h1>Russian Roulette</h1>
+    <button id="spinButton" onclick="spin()">Pull the Trigger</button>
+    <button id="resetButton" onclick="resetGame()" style="display: none; background-color: #008CBA;">Reset Table</button>
+    <div id="result"></div>
+    <div id="waiting">...</div>
+    <div id="odds">Probability of survival: 100.00%</div>
+    <footer>Human: <span id="humanScore">0</span> - Computer: <span id="computerScore">0</span></footer>
+
+    <script>
+        let spinButton = document.getElementById('spinButton');
+        let resetButton = document.getElementById('resetButton');
+        let resultDiv = document.getElementById('result');
+        let waitingDiv = document.getElementById('waiting');
+        let oddsDiv = document.getElementById('odds');
+        let humanScoreSpan = document.getElementById('humanScore');
+        let computerScoreSpan = document.getElementById('computerScore');
+        let body = document.body;
+        let humanScore = 0;
+        let computerScore = 0;
+        
+        let spinSound = new Audio('spin.mp3');
+        let gunshotSound = new Audio('gunshot.mp3');
+        let takeSound = new Audio('take.mp3');
+        let heartbeatSound = new Audio('heartbeat.mp3');
+        let clickSound = new Audio('click.mp3');
+
+        let safeMessages = [
+            "Phew...",
+            "Safe, for now...",
+            "A close call!",
+            "One more, and it would have...",
+            "Lucky you!",
+            "Still breathing.",
+            "Luckiest person alive.",
+            "You're dancing with death."
+        ];
+        let spinSoundPlayed = false; // Flag to check if spin sound has been played
+
+        function updateOddsText(text) {
+            oddsDiv.textContent = text;
+        }
+
+        function updateOdds() {
+            let remainingChambers = 6 - chamber; // Six bullets
+            let probabilityFraction = `${remainingChambers}/6`;
+            updateOddsText(`Probability of survival: ${probabilityFraction}`);
+        }
+
+        function spin() {
+            if (gameOver) return;
+
+            if (!spinSoundPlayed) {
+                spinSound.play(); // Play the spin sound effect only the first time
+                spinSoundPlayed = true; // Set the flag to true
+            }
+            heartbeatSound.play(); // Play heartbeat sound
+            spinButton.disabled = true;
+            waitingDiv.style.display = "block";
+            resultDiv.textContent = "";
+            body.classList.remove("green-bg", "red-bg"); // Reset background color
+            updateOdds();
+
+            setTimeout(() => {
+                chamber++;
+                updateOdds();
+
+                if (chamber === bulletChamber) {
+                    resultDiv.textContent = "BANG! You lose!";
+                    gunshotSound.play();
+                    body.classList.add("red-bg");
+                    computerScore++;
+                    computerScoreSpan.textContent = computerScore;
+                    gameOver = true;
+                    spinButton.style.display = "none";
+                    resetButton.style.display = "inline-block";
+                } else {
+                    clickSound.play(); // Play click sound
+                    let randomIndex = Math.floor(Math.random() * safeMessages.length);
+                    resultDiv.textContent = safeMessages[randomIndex];
+                    body.classList.add("green-bg");
+                    spinButton.textContent = "Wait..."; // Change button text to "Wait..."
+                    setTimeout(computerTurn, 3000); // Delay before computer's turn
+                }
+                waitingDiv.style.display = "none"; 
+            }, 4000);
+        }
+
+        function computerTurn() {
+            if (gameOver) return;
+
+            takeSound.play(); // Play take sound
+            spinButton.disabled = true;
+            spinButton.textContent = "Wait..."; // Change button text to "Wait..."
+            waitingDiv.style.display = "block";
+            resultDiv.textContent = "Computer's turn...";
+            body.classList.remove("green-bg", "red-bg");
+            updateOdds();
+
+            setTimeout(() => {
+                chamber++;
+                updateOdds();
+
+                if (chamber === bulletChamber) {
+                    resultDiv.textContent = "BANG! Computer loses!";
+                    gunshotSound.play();
+                    body.classList.add("red-bg");
+                    humanScore++;
+                    humanScoreSpan.textContent = humanScore;
+                    gameOver = true;
+                    spinButton.style.display = "none";
+                    resetButton.style.display = "inline-block";
+                } else {
+                    clickSound.play(); // Play click sound
+                    let randomIndex = Math.floor(Math.random() * safeMessages.length);
+                    resultDiv.textContent = safeMessages[randomIndex];
+                    body.classList.add("green-bg");
+                    spinButton.textContent = "Pull the Trigger"; // Change button text back to "Pull the Trigger"
+                    spinButton.disabled = false; // Re-enable the button after the computer's turn
+                }
+                waitingDiv.style.display = "none"; 
+            }, 4000);
+        }
+
+        function resetGame() {
+            chamber = 0;
+            bulletChamber = Math.floor(Math.random() * 6) + 1; // Ensure bulletChamber is between 1 and 6
+            gameOver = false;
+            resultDiv.textContent = "";
+            body.classList.remove("green-bg", "red-bg");
+            spinButton.style.display = "inline-block";
+            resetButton.style.display = "none";
+            spinSoundPlayed = false; // Reset the spin sound flag
+            spinButton.disabled = false; // Re-enable the button immediately after reset
+            spinButton.textContent = "Pull the Trigger"; // Reset button text
+            updateOdds();
+        }
+
+        // Initialize the game
+        let chamber = 0;
+        let bulletChamber;
+        let gameOver = false;
+
+        resetGame(); // Call resetGame initially
+    </script>
+</body>
+</html>

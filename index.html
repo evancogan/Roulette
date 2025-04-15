@@ -179,6 +179,7 @@
             "You're dancing with death."
         ];
         let spinSoundPlayed = false; // Flag to check if spin sound has been played
+        let currentRotation = 0;
 
         function updateOddsText(text) {
             oddsDiv.textContent = text;
@@ -199,15 +200,26 @@
             resultDiv.textContent = "";
             body.classList.remove("green-bg", "red-bg");
             
-            // Only play spin sound and animate on first pull
             if (!spinSoundPlayed) {
-                // Rotate to align bulletChamber with chamber1
-                revolverChamber.style.transform = `rotate(${(bulletChamber - 1) * 60}deg)`;
+                // Calculate initial rotation to align bullet with firing position
+                currentRotation = ((6 - bulletChamber) * 60) % 360;
+                revolverChamber.style.transform = `rotate(${currentRotation}deg)`;
                 revolverChamber.classList.remove('spinning');
                 void revolverChamber.offsetWidth;
                 revolverChamber.classList.add('spinning');
                 spinSound.play();
                 spinSoundPlayed = true;
+                
+                // Clear all visual indicators after spin starts
+                setTimeout(() => {
+                    document.querySelectorAll('.chamber').forEach(ch => {
+                        ch.classList.remove('active', 'empty');
+                    });
+                }, 100); // Short delay to ensure spin animation has started
+            } else {
+                // Rotate one chamber clockwise
+                currentRotation = (currentRotation + 60) % 360;
+                revolverChamber.style.transform = `rotate(${currentRotation}deg)`;
             }
             
             heartbeatSound.play();
@@ -290,18 +302,30 @@
 
         function resetGame() {
             chamber = 0;
-            bulletChamber = Math.floor(Math.random() * 6) + 1; // Ensure bulletChamber is between 1 and 6
+            bulletChamber = Math.floor(Math.random() * 6) + 1;
             gameOver = false;
             resultDiv.textContent = "";
             body.classList.remove("green-bg", "red-bg");
             spinButton.style.display = "inline-block";
             resetButton.style.display = "none";
-            spinSoundPlayed = false; // Reset the spin sound flag
-            spinButton.disabled = false; // Re-enable the button immediately after reset
-            spinButton.textContent = "Pull the Trigger"; // Reset button text
+            spinSoundPlayed = false;
+            spinButton.disabled = false;
+            spinButton.textContent = "Pull the Trigger";
+            
             const revolverChamber = document.querySelector('.revolver-chamber');
-            revolverChamber.style.transform = 'rotate(0deg)'; // Reset rotation
+            // Calculate initial rotation based on new bulletChamber
+            currentRotation = ((6 - bulletChamber) * 60) % 360;
+            revolverChamber.style.transform = `rotate(${currentRotation}deg)`;
             revolverChamber.classList.remove('spinning');
+            
+            // Clear all chamber indicators first
+            document.querySelectorAll('.chamber').forEach(ch => {
+                ch.classList.remove('active', 'empty');
+            });
+            
+            // Show the initial bullet chamber
+            document.querySelector(`.chamber${bulletChamber}`).classList.add('active');
+            
             updateOdds();
         }
 

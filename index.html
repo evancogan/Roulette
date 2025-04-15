@@ -8,7 +8,7 @@
         body {
             font-family: sans-serif;
             text-align: center;
-            transition: background-color 0.5s ease; /*Smooth transition for background color*/
+            transition: background-color 0.5s ease;
         }
         button {
             padding: 20px 40px;
@@ -57,6 +57,77 @@
         .red-bg {
             background-color: #ffcccb;
         }
+        .revolver-wrapper {
+            perspective: 1000px;
+            margin: 20px auto;
+            width: 200px;
+            height: 200px;
+        }
+
+        .revolver-chamber {
+            width: 200px;
+            height: 200px;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: none;
+        }
+
+        .chamber {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: #444;
+            border-radius: 50%;
+            border: 2px solid #333;
+            left: 50%;
+            top: 50%;
+            margin: -20px 0 0 -20px;
+        }
+
+        /* Chamber positions with chamber1 at 12 o'clock */
+        .chamber1 { transform: rotate(0deg) translateY(-80px); }
+        .chamber2 { transform: rotate(60deg) translateY(-80px); }
+        .chamber3 { transform: rotate(120deg) translateY(-80px); }
+        .chamber4 { transform: rotate(180deg) translateY(-80px); }
+        .chamber5 { transform: rotate(240deg) translateY(-80px); }
+        .chamber6 { transform: rotate(300deg) translateY(-80px); }
+
+        .center-pin {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #666;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #333;
+            z-index: 1;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(3600deg); }
+        }
+
+        .spinning {
+            animation: spin 2s cubic-bezier(0.1, 0.7, 0.5, 1);
+        }
+
+        .chamber.active {
+            background: #666;
+            box-shadow: inset 0 0 10px rgba(255, 0, 0, 0.5);
+        }
+
+        .chamber.empty {
+            background: #333;
+        }
+        @keyframes dimLight {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(0.7); }
+            100% { filter: brightness(1); }
+            
+        }
     </style>
 </head>
 <body>
@@ -66,6 +137,17 @@
     <div id="result"></div>
     <div id="waiting">...</div>
     <div id="odds">Probability of survival: 100.00%</div>
+    <div class="revolver-wrapper">
+        <div class="revolver-chamber">
+            <div class="chamber chamber1"></div>
+            <div class="chamber chamber2"></div>
+            <div class="chamber chamber3"></div>
+            <div class="chamber chamber4"></div>
+            <div class="chamber chamber5"></div>
+            <div class="chamber chamber6"></div>
+            <div class="center-pin"></div>
+        </div>
+    </div>
     <footer>Human: <span id="humanScore">0</span> - Computer: <span id="computerScore">0</span></footer>
 
     <script>
@@ -111,19 +193,28 @@
         function spin() {
             if (gameOver) return;
 
-            if (!spinSoundPlayed) {
-                spinSound.play(); // Play the spin sound effect only the first time
-                spinSoundPlayed = true; // Set the flag to true
-            }
-            heartbeatSound.play(); // Play heartbeat sound
+            const revolverChamber = document.querySelector('.revolver-chamber');
             spinButton.disabled = true;
             waitingDiv.style.display = "block";
             resultDiv.textContent = "";
-            body.classList.remove("green-bg", "red-bg"); // Reset background color
-            updateOdds();
+            body.classList.remove("green-bg", "red-bg");
+            
+            // Only play spin sound and animate on first pull
+            if (!spinSoundPlayed) {
+                // Rotate to align bulletChamber with chamber1
+                revolverChamber.style.transform = `rotate(${(bulletChamber - 1) * 60}deg)`;
+                revolverChamber.classList.remove('spinning');
+                void revolverChamber.offsetWidth;
+                revolverChamber.classList.add('spinning');
+                spinSound.play();
+                spinSoundPlayed = true;
+            }
+            
+            heartbeatSound.play();
 
             setTimeout(() => {
                 chamber++;
+                updateChamberVisuals();
                 updateOdds();
 
                 if (chamber === bulletChamber) {
@@ -160,6 +251,7 @@
 
             setTimeout(() => {
                 chamber++;
+                updateChamberVisuals();
                 updateOdds();
 
                 if (chamber === bulletChamber) {
@@ -183,6 +275,19 @@
             }, 4000);
         }
 
+        function updateChamberVisuals() {
+            const chambers = document.querySelectorAll('.chamber');
+            chambers.forEach((ch, index) => {
+                ch.classList.remove('active', 'empty');
+                if (index + 1 === chamber) {
+                    ch.classList.add('active');
+                }
+                else if (index + 1 < chamber) {
+                    ch.classList.add('empty');
+                }
+            });
+        }
+
         function resetGame() {
             chamber = 0;
             bulletChamber = Math.floor(Math.random() * 6) + 1; // Ensure bulletChamber is between 1 and 6
@@ -194,6 +299,9 @@
             spinSoundPlayed = false; // Reset the spin sound flag
             spinButton.disabled = false; // Re-enable the button immediately after reset
             spinButton.textContent = "Pull the Trigger"; // Reset button text
+            const revolverChamber = document.querySelector('.revolver-chamber');
+            revolverChamber.style.transform = 'rotate(0deg)'; // Reset rotation
+            revolverChamber.classList.remove('spinning');
             updateOdds();
         }
 

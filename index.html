@@ -96,6 +96,8 @@
             position: relative;
             transform-style: preserve-3d;
             transition: transform 0.3s ease;
+            /* Add this line to control rotation */
+            transform: rotateZ(var(--rotation));
         }
 
         .chamber {
@@ -137,15 +139,6 @@
 
         .chamber.empty {
             background: #333;
-        }
-
-        .spinning {
-            animation: spin 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(60deg); }
         }
 
         .bg-success { background-color: var(--success-color); }
@@ -216,11 +209,9 @@
 
             initializeGameState() {
                 this.state = {
-                    chamber: 0,
+                    chamber: 1, // Always 1-6, chamber to be fired next
                     bulletChamber: 1,
                     gameOver: false,
-                    currentRotation: 0,
-                    spinSoundPlayed: false,
                     scores: {
                         human: 0,
                         computer: 0
@@ -235,6 +226,16 @@
                     "The chamber was empty",
                     "Living on the edge"
                 ];
+                
+                this.waitingMessages = [
+                    "Waiting for the bullet...",
+                    "Holding my breath...",
+                    "Is it my turn?",
+                    "Feeling lucky...",
+                    "The tension is real...",
+                    "What will happen next?",
+                    "Sweating Bullets..."
+                ];
             }
 
             setupEventListeners() {
@@ -243,7 +244,7 @@
             }
 
             updateOdds() {
-                const remainingChambers = 6 - this.state.chamber;
+                const remainingChambers = 7 - this.state.chamber;
                 this.elements.odds.textContent = 
                     `Probability of survival: ${remainingChambers}/6`;
             }
@@ -252,14 +253,12 @@
                 if (this.state.gameOver) return;
 
                 this.elements.spinButton.disabled = true;
+                this.elements.waiting.textContent = this.waitingMessages[Math.floor(Math.random() * this.waitingMessages.length)];
                 this.elements.waiting.style.display = "block";
                 this.elements.result.textContent = "";
                 document.body.classList.remove("bg-success", "bg-danger");
 
                 await this.animateSpinAndWait();
-                this.state.chamber++;
-                this.updateChamberVisuals();
-                this.updateOdds();
 
                 if (this.state.chamber === this.state.bulletChamber) {
                     this.handleLoss();
@@ -269,18 +268,15 @@
             }
 
             async animateSpinAndWait() {
-                this.elements.revolver.classList.remove('spinning');
-                void this.elements.revolver.offsetWidth;
-                this.elements.revolver.classList.add('spinning');
+                // Always rotate so the current chamber is at the top (0deg)
+                // Each chamber is 60deg apart, so rotate by -60deg * (chamber - 1)
+                const targetRotation = -60 * (this.state.chamber - 1);
+                this.elements.revolver.style.setProperty('--rotation', `${targetRotation}deg`);
 
-                if (!this.state.spinSoundPlayed) {
-                    this.sounds.spin.play();
-                    this.state.spinSoundPlayed = true;
-                }
-
+                this.sounds.spin.play();
                 this.sounds.heartbeat.play();
-                
-                return new Promise(resolve => setTimeout(resolve, 4000));
+
+                return new Promise(resolve => setTimeout(resolve, 1200));
             }
 
             handleLoss() {
@@ -298,7 +294,7 @@
                     this.messages[Math.floor(Math.random() * this.messages.length)];
                 document.body.classList.add("bg-success");
                 this.elements.spinButton.textContent = "Wait...";
-                setTimeout(() => this.computerTurn(), 3000);
+                setTimeout(() => this.computerTurn(), 2000);
             }
 
             async computerTurn() {
@@ -307,14 +303,15 @@
                 this.sounds.take.play();
                 this.elements.spinButton.disabled = true;
                 this.elements.spinButton.textContent = "Wait...";
+                this.elements.waiting.textContent = this.waitingMessages[Math.floor(Math.random() * this.waitingMessages.length)];
                 this.elements.waiting.style.display = "block";
                 this.elements.result.textContent = "Computer's turn...";
                 document.body.classList.remove("bg-success", "bg-danger");
 
+                // Advance to next chamber
+                this.state.chamber = this.nextChamber(this.state.chamber);
+
                 await this.animateSpinAndWait();
-                this.state.chamber++;
-                this.updateChamberVisuals();
-                this.updateOdds();
 
                 if (this.state.chamber === this.state.bulletChamber) {
                     this.handleComputerLoss();
@@ -339,17 +336,36 @@
                 document.body.classList.add("bg-success");
                 this.elements.spinButton.textContent = "Pull the Trigger";
                 this.elements.spinButton.disabled = false;
+                // Advance to next chamber for player's turn
+                this.state.chamber = this.nextChamber(this.state.chamber);
+                this.updateChamberVisuals();
+                this.updateOdds();
             }
 
             updateChamberVisuals() {
-                document.querySelectorAll('.chamber').forEach((chamber, index) => {
+                // Clear all chambers
+                document.querySelectorAll('.chamber').forEach(chamber => {
                     chamber.classList.remove('active', 'empty');
-                    if (index + 1 === this.state.chamber) {
-                        chamber.classList.add('active');
-                    } else if (index + 1 < this.state.chamber) {
-                        chamber.classList.add('empty');
-                    }
                 });
+
+                // Mark chambers that have been fired as empty
+                for (let i = 1; i < this.state.chamber; i++) {
+                    const firedChamber = document.querySelector(`.chamber--${i}`);
+                    if (firedChamber) {
+                        firedChamber.classList.add('empty');
+                    }
+                }
+
+                // Mark the bullet chamber as active
+                const bulletChamber = document.querySelector(`.chamber--${this.state.bulletChamber}`);
+                if (bulletChamber) {
+                    bulletChamber.classList.add('active');
+                }
+            }
+
+            nextChamber(current) {
+                // 1-6, wraps around
+                return current % 6 + 1;
             }
 
             endGame() {
@@ -359,26 +375,21 @@
             }
 
             resetGame() {
-                this.state.chamber = 0;
+                this.state.chamber = 1;
                 this.state.bulletChamber = Math.floor(Math.random() * 6) + 1;
                 this.state.gameOver = false;
-                this.state.spinSoundPlayed = false;
-                
+
                 this.elements.result.textContent = "";
                 document.body.classList.remove("bg-success", "bg-danger");
                 this.elements.spinButton.style.display = "inline-block";
                 this.elements.resetButton.style.display = "none";
                 this.elements.spinButton.disabled = false;
                 this.elements.spinButton.textContent = "Pull the Trigger";
-                
-                this.elements.revolver.classList.remove('spinning');
-                document.querySelectorAll('.chamber').forEach(chamber => {
-                    chamber.classList.remove('active', 'empty');
-                });
-                
-                document.querySelector(`.chamber--${this.state.bulletChamber}`)
-                    .classList.add('active');
-                
+
+                // Reset the rotation
+                this.elements.revolver.style.setProperty('--rotation', '0deg');
+
+                this.updateChamberVisuals();
                 this.updateOdds();
             }
         }

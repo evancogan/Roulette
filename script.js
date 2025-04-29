@@ -1,10 +1,11 @@
 class RouletteGame {
             constructor() {
+                this.hasStarted = false;
                 this.initializeElements();
                 this.initializeAudio();
                 this.initializeGameState();
                 this.setupEventListeners();
-                this.resetGame();
+                this.resetGame(false); // Don't play spin sound on initial load
             }
 
             initializeElements() {
@@ -62,8 +63,15 @@ class RouletteGame {
             }
 
             setupEventListeners() {
-                this.elements.spinButton.addEventListener('click', () => this.spin());
-                this.elements.resetButton.addEventListener('click', () => this.resetGame());
+                this.elements.spinButton.addEventListener('click', () => {
+                    if (!this.hasStarted) {
+                        this.hasStarted = true;
+                        this.sounds.spin.currentTime = 0;
+                        this.sounds.spin.play();
+                    }
+                    this.spin();
+                });
+                this.elements.resetButton.addEventListener('click', () => this.resetGame(true));
             }
 
             updateOdds() {
@@ -81,7 +89,15 @@ class RouletteGame {
                 this.elements.result.textContent = "";
                 document.body.classList.remove("bg-success", "bg-danger");
 
+                // Only play heartbeat for suspense
+                this.sounds.heartbeat.play();
+
                 await this.animateSpinAndWait();
+
+                await new Promise(resolve => setTimeout(resolve, 4000));
+
+                this.sounds.heartbeat.pause();
+                this.sounds.heartbeat.currentTime = 0;
 
                 if (this.state.chamber === this.state.bulletChamber) {
                     this.handleLoss();
@@ -91,15 +107,10 @@ class RouletteGame {
             }
 
             async animateSpinAndWait() {
-                // Always rotate so the current chamber is at the top (0deg)
-                // Each chamber is 60deg apart, so rotate by -60deg * (chamber - 1)
                 const targetRotation = -60 * (this.state.chamber - 1);
                 this.elements.revolver.style.setProperty('--rotation', `${targetRotation}deg`);
-
-                this.sounds.spin.play();
-                this.sounds.heartbeat.play();
-
-                return new Promise(resolve => setTimeout(resolve, 1200));
+                // No need for a long delay here anymore
+                return new Promise(resolve => setTimeout(resolve, 600));
             }
 
             handleLoss() {
@@ -123,7 +134,9 @@ class RouletteGame {
             async computerTurn() {
                 if (this.state.gameOver) return;
 
+                // Optional: play take sound at the start of computer's turn
                 this.sounds.take.play();
+
                 this.elements.spinButton.disabled = true;
                 this.elements.spinButton.textContent = "Wait...";
                 this.elements.waiting.textContent = this.waitingMessages[Math.floor(Math.random() * this.waitingMessages.length)];
@@ -131,10 +144,17 @@ class RouletteGame {
                 this.elements.result.textContent = "Computer's turn...";
                 document.body.classList.remove("bg-success", "bg-danger");
 
-                // Advance to next chamber
+                // Only play heartbeat for suspense
+                this.sounds.heartbeat.play();
+
                 this.state.chamber = this.nextChamber(this.state.chamber);
 
                 await this.animateSpinAndWait();
+
+                await new Promise(resolve => setTimeout(resolve, 4000));
+
+                this.sounds.heartbeat.pause();
+                this.sounds.heartbeat.currentTime = 0;
 
                 if (this.state.chamber === this.state.bulletChamber) {
                     this.handleComputerLoss();
@@ -153,7 +173,7 @@ class RouletteGame {
             }
 
             handleComputerSurvival() {
-                this.sounds.click.play();
+                this.sounds.click.play(); // <-- Play click when computer survives
                 this.updateChamberVisuals();
                 this.elements.result.textContent = 
                     this.messages[Math.floor(Math.random() * this.messages.length)];
@@ -196,7 +216,7 @@ class RouletteGame {
                 this.elements.resetButton.style.display = "inline-block";
             }
 
-            resetGame() {
+            resetGame(playSpin = true) {
                 this.state.chamber = 1;
                 this.state.bulletChamber = Math.floor(Math.random() * 6) + 1;
                 this.state.gameOver = false;
@@ -208,9 +228,13 @@ class RouletteGame {
                 this.elements.spinButton.disabled = false;
                 this.elements.spinButton.textContent = "Pull the Trigger";
 
-                // Reset the rotation
-                this.elements.revolver.style.setProperty('--rotation', '0deg');
+                // Only play spin sound if not the very first load
+                if (playSpin) {
+                    this.sounds.spin.currentTime = 0;
+                    this.sounds.spin.play();
+                }
 
+                this.elements.revolver.style.setProperty('--rotation', '0deg');
                 this.updateChamberVisuals();
                 this.updateOdds();
             }

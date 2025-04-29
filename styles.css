@@ -88,9 +88,8 @@ body {
     height: 100%;
     position: relative;
     transform-style: preserve-3d;
-    transition: transform 0.3s ease;
-    /* Add this line to control rotation */
-    transform: rotateZ(var(--rotation));
+    transition: transform 3s cubic-bezier(0.33, 1, 0.68, 1);
+    transform: rotate(var(--rotation, 0deg));
 }
 
 .chamber {

@@ -107,10 +107,19 @@ class RouletteGame {
             }
 
             async animateSpinAndWait() {
-                const targetRotation = -60 * (this.state.chamber - 1);
-                this.elements.revolver.style.setProperty('--rotation', `${targetRotation}deg`);
-                // No need for a long delay here anymore
-                return new Promise(resolve => setTimeout(resolve, 600));
+                // Number of full spins (adjust for effect)
+                const fullSpins = 4;
+                // Each chamber is 60 degrees apart
+                const chamberOffset = -60 * (this.state.chamber - 1);
+                // Total rotation: full spins + chamber offset
+                const totalRotation = (360 * fullSpins) + chamberOffset;
+
+                // Set transition duration to 3s for smooth deceleration
+                this.elements.revolver.style.transition = 'transform 3s cubic-bezier(0.33, 1, 0.68, 1)';
+                this.elements.revolver.style.transform = `rotate(${totalRotation}deg)`;
+
+                // Wait for the spin to finish (match spin.mp3 duration)
+                return new Promise(resolve => setTimeout(resolve, 3000));
             }
 
             handleLoss() {

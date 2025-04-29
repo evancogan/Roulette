@@ -67,7 +67,7 @@ class RouletteGame {
             }
 
             updateOdds() {
-                const remainingChambers = 7 - this.state.chamber;
+                const remainingChambers = 6 - this.state.chamber;
                 this.elements.odds.textContent = 
                     `Probability of survival: ${remainingChambers}/6`;
             }
@@ -170,17 +170,16 @@ class RouletteGame {
                 document.querySelectorAll('.chamber').forEach(chamber => {
                     chamber.classList.remove('active', 'empty');
                 });
-
-                // Mark chambers that have been fired as empty
-                for (let i = 1; i < this.state.chamber; i++) {
-                    const firedChamber = document.querySelector(`.chamber--${i}`);
+                // If game over, mark all chambers up to and including the bullet chamber as empty
+                let last = this.state.gameOver ? this.state.bulletChamber : this.state.chamber - 1;
+                for (let i = 1; i <= last; i++) {
+                    const firedChamber = document.querySelector(`.chamber[data-chamber="${i}"]`);
                     if (firedChamber) {
                         firedChamber.classList.add('empty');
                     }
                 }
-
-                // Mark the bullet chamber as active
-                const bulletChamber = document.querySelector(`.chamber--${this.state.bulletChamber}`);
+                // Mark the current chamber as active
+                const bulletChamber = document.querySelector(`.chamber[data-chamber="${this.state.chamber}"]`);
                 if (bulletChamber) {
                     bulletChamber.classList.add('active');
                 }

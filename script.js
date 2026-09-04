@@ -35,6 +35,7 @@ class RouletteGame {
                 this.state = {
                     chamber: 1, // Always 1-6, chamber to be fired next
                     bulletChamber: 1,
+                    rotation: 0,
                     gameOver: false,
                     scores: {
                         human: 0,
@@ -107,16 +108,16 @@ class RouletteGame {
             }
 
             async animateSpinAndWait() {
-                // Number of full spins (adjust for effect)
+                // Always advance to the next matching chamber in the same direction.
                 const fullSpins = 4;
-                // Each chamber is 60 degrees apart
-                const chamberOffset = -60 * (this.state.chamber - 1);
-                // Total rotation: full spins + chamber offset
-                const totalRotation = (360 * fullSpins) + chamberOffset;
+                const targetOffset = (-60 * (this.state.chamber - 1) + 360) % 360;
+                const currentOffset = ((this.state.rotation % 360) + 360) % 360;
+                const forwardOffset = (targetOffset - currentOffset + 360) % 360;
+                this.state.rotation += (360 * fullSpins) + forwardOffset;
 
                 // Set transition duration to 3s for smooth deceleration
                 this.elements.revolver.style.transition = 'transform 3s cubic-bezier(0.33, 1, 0.68, 1)';
-                this.elements.revolver.style.transform = `rotate(${totalRotation}deg)`;
+                this.elements.revolver.style.setProperty('--rotation', `${this.state.rotation}deg`);
 
                 // Wait for the spin to finish (match spin.mp3 duration)
                 return new Promise(resolve => setTimeout(resolve, 3000));
@@ -228,6 +229,7 @@ class RouletteGame {
             resetGame(playSpin = true) {
                 this.state.chamber = 1;
                 this.state.bulletChamber = Math.floor(Math.random() * 6) + 1;
+                this.state.rotation = 0;
                 this.state.gameOver = false;
 
                 this.elements.result.textContent = "";

@@ -3,6 +3,9 @@ const CHAMBER_ANGLE = 360 / CHAMBER_COUNT;
 const TURN_MS = 7000;        // total time from trigger pull to result
 const SPIN_MS = 3000;        // the one long cylinder spin per game
 const STEP_MS = 350;         // indexing forward a single chamber
+const DIM_PER_SHOT = 6.5;    // how much lightness the room loses per chamber fired
+const DIM_FLOOR = 56;        // and how dark it is ever allowed to get
+const BLACKOUT_MS = 5000;    // how long the screen stays black after the player dies
 
 class RouletteGame {
             constructor() {
@@ -22,7 +25,8 @@ class RouletteGame {
                     odds: document.getElementById('odds'),
                     humanScore: document.getElementById('humanScore'),
                     computerScore: document.getElementById('computerScore'),
-                    revolver: document.querySelector('.revolver__cylinder')
+                    revolver: document.querySelector('.revolver__cylinder'),
+                    blackout: document.getElementById('blackout')
                 };
             }
 
@@ -53,6 +57,7 @@ class RouletteGame {
                     chamber: 1, // Always 1-6, chamber to be fired next
                     bulletChamber: 1,
                     rotation: 0,
+                    playerTurn: true, // who fires next; decided by a coin toss each game
                     hasSpun: false, // the long spin happens once per game
                     cylinderReady: false, // true once that spin has settled
                     gameOver: false,
@@ -62,58 +67,190 @@ class RouletteGame {
                     }
                 };
 
-                // Both pools are keyed by how many chambers are still unfired:
-                // fewer chambers left means a worse chance, so the tone escalates.
-                this.messages = {
-                    calm: [
-                        "Lucky escape!",
-                        "Barely worth flinching.",
-                        "The chamber was empty",
-                        "Still breathing..."
-                    ],
-                    uneasy: [
-                        "That one felt close.",
-                        "My hands aren't steady anymore.",
-                        "Close call!",
-                        "You survive... for now"
-                    ],
-                    scared: [
-                        "I can't keep doing this.",
-                        "My heart is going to give out first.",
-                        "That was a coin flip. A COIN FLIP."
-                    ],
-                    dread: [
-                        "It's the last one. It has to be the last one.",
-                        "There's nowhere left for it to hide."
-                    ]
+                // My turns are narrated from the inside, my opponent's from the outside.
+                // `suspense` plays during the wait, `payoff` when the hammer falls on an
+                // empty chamber. Both are keyed by chambers still unfired, so the tone
+                // tracks the odds: 6 is bravado, 1 is a certainty.
+                //
+                // Three deliberate shapes here. There is nothing written for a death - the
+                // gunshot carries that alone. `payoff` stops at 2, because surviving with
+                // one chamber left is impossible: the bullet has to be in it, so that
+                // hopeless beat lives in `suspense` at 1, before the trigger is pulled.
+                // And surviving at 2 is not relief but victory - it hands the last chamber
+                // to the other player - so those lines turn cruel.
+                this.flavor = {
+                    player: {
+                        suspense: {
+                            6: [
+                                "Six chambers. One bullet.",
+                                "I've had worse odds.",
+                                "First one's the easy one. That's what they say.",
+                                "Here goes..."
+                            ],
+                            5: [
+                                "Five left. Still more empty than not.",
+                                "I try not to do the math. I do the math.",
+                                "The gun is heavier than it was.",
+                                "Second time. It doesn't get easier."
+                            ],
+                            4: [
+                                "Four chambers. One of them is the one.",
+                                "Three-quarters. That used to sound like a good number.",
+                                "Four left, and I can feel every one of them.",
+                                "I stop pretending this is a game."
+                            ],
+                            3: [
+                                "Three left. One in three.",
+                                "This is where people stop.",
+                                "I should stop. I know I should stop.",
+                                "My pulse is loud enough to drown out the room."
+                            ],
+                            2: [
+                                "Two chambers. A coin flip decides the rest of it.",
+                                "Fifty-fifty. That's all the luck I have left.",
+                                "I can't make my finger move.",
+                                "Half. It comes down to half."
+                            ],
+                            1: [
+                                "One chamber. This is the one that kills me.",
+                                "No luck left to borrow. I know exactly where it is.",
+                                "Nothing in there but the bullet. I pull anyway.",
+                                "So that's it, then."
+                            ]
+                        },
+                        payoff: {
+                            6: [
+                                "Empty. Obviously.",
+                                "Click. I let the breath out like I meant to hold it.",
+                                "Nothing. I almost laugh.",
+                                "Still breathing."
+                            ],
+                            5: [
+                                "Empty. Steadier than I have any right to be.",
+                                "Click. Two down. I don't like how that sounds.",
+                                "Nothing. I put it down before anyone sees me shake.",
+                                "The easy ones are running out."
+                            ],
+                            4: [
+                                "Empty. I can't feel my hands.",
+                                "Click. Something behind my ribs comes loose.",
+                                "Nothing, and the relief is worse than the fear was.",
+                                "I'm running out of chambers to be lucky in."
+                            ],
+                            3: [
+                                "Empty. It takes both hands to set it down.",
+                                "Click. Still shaking.",
+                                "Nothing. I nearly dropped it.",
+                                "Closer than the number makes it sound."
+                            ],
+                            2: [
+                                "Empty. The last chamber is theirs, and we both know what's in it.",
+                                "Click. I win. I'm smiling and I can't stop.",
+                                "Nothing - and just like that it's over. I slide the gun across, gently.",
+                                "Empty. I should feel relief. What I feel is so much better than that."
+                            ]
+                        }
+                    },
+                    computer: {
+                        suspense: {
+                            6: [
+                                "My opponent takes the gun without looking at it.",
+                                "Six chambers. They seem almost bored.",
+                                "No hesitation. There's nothing to hesitate about yet.",
+                                "They don't even check the cylinder."
+                            ],
+                            5: [
+                                "They check the cylinder twice.",
+                                "Five chambers. The motion is a fraction slower.",
+                                "My opponent pauses. Barely, but they pause.",
+                                "Same motions. Something in them has changed."
+                            ],
+                            4: [
+                                "Four chambers. Their hand isn't quite steady.",
+                                "They stall, long enough for both of us to notice.",
+                                "My opponent is doing the math again.",
+                                "They lift the gun slowly, as if slowly helps."
+                            ],
+                            3: [
+                                "Three chambers. My opponent has stopped pretending.",
+                                "They hold the gun a long moment before they move.",
+                                "Their hand is shaking. They don't seem to know.",
+                                "They hesitate so long I almost say something."
+                            ],
+                            2: [
+                                "Two chambers. My opponent can't bring the gun up.",
+                                "They know the odds better than I do, and it's worse for knowing.",
+                                "They're begging, in whatever way they have to beg.",
+                                "Two left. Nothing left to hide behind."
+                            ],
+                            1: [
+                                "One chamber. They know. They've known for a while.",
+                                "My opponent doesn't move. There's nothing left to try.",
+                                "They lift the gun anyway. That's the worst part.",
+                                "Nothing in there but the bullet. They know it too."
+                            ]
+                        },
+                        payoff: {
+                            6: [
+                                "Click. They set the gun down, unbothered.",
+                                "Empty. Slid back across the table without a word.",
+                                "Nothing. If they felt that, they didn't show it.",
+                                "Click. Like a formality."
+                            ],
+                            5: [
+                                "Empty. They exhale, which they have never needed to do.",
+                                "Click. Set down more carefully this time.",
+                                "Nothing. They look at the gun a beat too long.",
+                                "Empty. They don't hand it over right away."
+                            ],
+                            4: [
+                                "Click. Relieved, and they hate that it shows.",
+                                "Empty. They put it down harder than they meant to.",
+                                "Nothing. They won't look at me.",
+                                "Click. They've stopped trying to look calm."
+                            ],
+                            3: [
+                                "Empty. They set it down and don't let go.",
+                                "Click. My opponent makes a sound I haven't heard before.",
+                                "Nothing. They stare at the cylinder like they've been cheated.",
+                                "Empty. It takes them three tries to pass the gun back."
+                            ],
+                            2: [
+                                "Click. They smile. The last chamber is mine.",
+                                "Empty. They slide the gun over almost tenderly. They're enjoying this.",
+                                "Nothing. They're pleased with themselves, and they want me to see it.",
+                                "Empty. Whatever was breaking in them has healed. They know I'm finished."
+                            ]
+                        }
+                    }
                 };
 
-                this.waitingMessages = {
-                    calm: [
-                        "Feeling lucky...",
-                        "Is it my turn?",
-                        "What will happen next?"
-                    ],
-                    uneasy: [
-                        "Waiting for the bullet...",
-                        "The tension is real...",
-                        "Sweating bullets..."
-                    ],
-                    scared: [
-                        "Holding my breath...",
-                        "Please, not this one.",
-                        "I don't want to look."
-                    ],
-                    dread: [
-                        "This is it. This is how it ends.",
-                        "No luck left to borrow."
-                    ]
-                };
+                this.lastLine = null; // so the same line never lands twice running
             }
 
             setupEventListeners() {
-                this.elements.spinButton.addEventListener('click', () => this.takeTurn(true));
+                this.elements.spinButton.addEventListener('click', () => this.takeTurn(this.state.playerTurn));
                 this.elements.resetButton.addEventListener('click', () => this.resetGame());
+            }
+
+            // Darkens one step per chamber fired, brightening only on reset. Green marks a
+            // player survival; the computer's turns stay on the neutral grey ramp.
+            setBackground(mood) {
+                const fired = this.state.gameOver
+                    ? this.state.chamber
+                    : this.state.chamber - 1;
+                const light = Math.max(DIM_FLOOR, 100 - fired * DIM_PER_SHOT);
+                const tinted = Math.max(DIM_FLOOR, light - 14);
+
+                let color;
+                if (mood === 'safe') {
+                    color = `hsl(122, 46%, ${tinted}%)`;
+                } else if (mood === 'dead') {
+                    color = `hsl(2, 62%, ${tinted}%)`;
+                } else {
+                    color = `hsl(0, 0%, ${light}%)`;
+                }
+                document.body.style.backgroundColor = color;
             }
 
             // Chambers still unfired, including the one about to fire.
@@ -121,19 +258,17 @@ class RouletteGame {
                 return CHAMBER_COUNT + 1 - this.state.chamber;
             }
 
-            pickMessage(pool) {
-                const remaining = this.remainingChambers();
-                let tier;
-                if (remaining >= 5) {
-                    tier = pool.calm;
-                } else if (remaining >= 3) {
-                    tier = pool.uneasy;
-                } else if (remaining === 2) {
-                    tier = pool.scared;
-                } else {
-                    tier = pool.dread;
-                }
-                return tier[Math.floor(Math.random() * tier.length)];
+            pickLine(isPlayer, moment) {
+                const pool = this.flavor[isPlayer ? 'player' : 'computer'][moment];
+                // `payoff` has no entry for one chamber left - nobody survives that - so
+                // fall back to the tensest pool that does exist rather than blowing up.
+                const lines = pool[this.remainingChambers()] || pool[2];
+                // Never land the same line twice running.
+                const choices = lines.length > 1
+                    ? lines.filter(line => line !== this.lastLine)
+                    : lines;
+                this.lastLine = choices[Math.floor(Math.random() * choices.length)];
+                return this.lastLine;
             }
 
             updateOdds() {
@@ -157,10 +292,11 @@ class RouletteGame {
 
                 this.elements.spinButton.disabled = true;
                 this.elements.spinButton.textContent = "Wait...";
-                this.elements.waiting.textContent = this.pickMessage(this.waitingMessages);
+                this.elements.waiting.textContent = this.pickLine(isPlayer, 'suspense');
                 this.elements.waiting.style.display = "block";
-                this.elements.result.textContent = isPlayer ? "" : "Computer's turn...";
-                document.body.classList.remove("bg-success", "bg-danger");
+                // The suspense line already says whose turn it is, in whose voice.
+                this.elements.result.textContent = "";
+                this.setBackground('neutral');
 
                 if (!isPlayer) {
                     this.playSound('take');
@@ -225,11 +361,8 @@ class RouletteGame {
             }
 
             handleLoss(isPlayer) {
-                this.elements.result.textContent = isPlayer
-                    ? "BANG! Game Over!"
-                    : "BANG! Computer loses!";
+                this.elements.result.textContent = "";
                 this.playSound('gunshot');
-                document.body.classList.add("bg-danger");
 
                 if (isPlayer) {
                     this.state.scores.computer++;
@@ -240,23 +373,31 @@ class RouletteGame {
                 }
 
                 this.endGame();
+                this.setBackground('dead');
+
+                if (isPlayer) {
+                    this.elements.blackout.classList.add('on');
+                    setTimeout(() => this.elements.blackout.classList.remove('on'), BLACKOUT_MS);
+                }
             }
 
             handleSurvival(isPlayer) {
                 this.playSound('click');
-                this.elements.result.textContent = this.pickMessage(this.messages);
-                document.body.classList.add("bg-success");
+                this.elements.result.textContent = this.pickLine(isPlayer, 'payoff');
 
                 // Advance to the chamber the next pull will fire.
                 this.state.chamber = this.nextChamber(this.state.chamber);
+                this.setBackground(isPlayer ? 'safe' : 'neutral');
                 this.updateChamberVisuals();
                 this.updateOdds();
 
-                if (isPlayer) {
-                    setTimeout(() => this.takeTurn(false), 2000);
-                } else {
+                // The gun goes to whoever didn't just fire.
+                this.state.playerTurn = !isPlayer;
+                if (this.state.playerTurn) {
                     this.elements.spinButton.textContent = "Pull the Trigger";
                     this.elements.spinButton.disabled = false;
+                } else {
+                    setTimeout(() => this.takeTurn(false), 2000);
                 }
             }
 
@@ -302,14 +443,20 @@ class RouletteGame {
                 this.state.hasSpun = false;
                 this.state.cylinderReady = false;
                 this.state.gameOver = false;
+                this.state.playerTurn = Math.random() < 0.5;
 
                 this.elements.result.textContent = "";
                 this.elements.waiting.style.display = "none";
-                document.body.classList.remove("bg-success", "bg-danger");
+                this.elements.blackout.classList.remove('on');
+                this.setBackground('neutral');
                 this.elements.spinButton.style.display = "inline-block";
                 this.elements.resetButton.style.display = "none";
                 this.elements.spinButton.disabled = false;
-                this.elements.spinButton.textContent = "Pull the Trigger";
+                // Even when they go first the player has to press something: browsers mute
+                // audio until a gesture, and the opening spin needs its sound.
+                this.elements.spinButton.textContent = this.state.playerTurn
+                    ? "Pull the Trigger"
+                    : "Hand Over the Gun";
 
                 // Snap back to zero without animating the cylinder backwards.
                 this.elements.revolver.style.transition = 'none';

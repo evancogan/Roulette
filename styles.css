@@ -1,8 +1,6 @@
 :root {
     --primary-color: #4CAF50;
     --secondary-color: #008CBA;
-    --danger-color: #ffcccb;
-    --success-color: #90ee90;
     --disabled-color: #cccccc;
     --chamber-color: #b9bdc4;   /* unfired: light grey, still loaded */
     --chamber-fired: #050505;   /* fired: a black hole in the cylinder */
@@ -17,6 +15,7 @@ body {
     margin: 0;
     padding: 20px;
     min-height: 100vh;
+    background-color: hsl(0, 0%, 100%);
     transition: background-color 0.5s ease;
 }
 
@@ -73,7 +72,8 @@ body {
     left: 0;
     bottom: 0;
     width: 100%;
-    background-color: #f0f0f0;
+    /* Translucent so it tracks the page as it darkens, instead of glaring. */
+    background-color: rgba(0, 0, 0, 0.06);
     padding: 15px;
     font-size: 18px;
 }
@@ -144,5 +144,19 @@ body {
     box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.95);
 }
 
-.bg-success { background-color: var(--success-color); }
-.bg-danger { background-color: var(--danger-color); }
+.blackout {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 1.5s ease;
+}
+
+/* Snaps in on the gunshot, lifts slowly afterwards. */
+.blackout.on {
+    opacity: 1;
+    pointer-events: auto;
+    transition-duration: 0.12s;
+}

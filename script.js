@@ -1,11 +1,16 @@
+const CHAMBER_COUNT = 6;
+const CHAMBER_ANGLE = 360 / CHAMBER_COUNT;
+const TURN_MS = 7000;        // total time from trigger pull to result
+const SPIN_MS = 3000;        // the one long cylinder spin per game
+const STEP_MS = 350;         // indexing forward a single chamber
+
 class RouletteGame {
             constructor() {
-                this.hasStarted = false;
                 this.initializeElements();
                 this.initializeAudio();
                 this.initializeGameState();
                 this.setupEventListeners();
-                this.resetGame(false); // Don't play spin sound on initial load
+                this.resetGame();
             }
 
             initializeElements() {
@@ -29,6 +34,18 @@ class RouletteGame {
                     heartbeat: new Audio('heartbeat.mp3'),
                     click: new Audio('click.mp3')
                 };
+                // Decode during page load instead of at the first trigger pull,
+                // otherwise short clips like click.mp3 get clipped at the start.
+                Object.values(this.sounds).forEach(sound => {
+                    sound.preload = 'auto';
+                    sound.load();
+                });
+            }
+
+            playSound(name) {
+                const sound = this.sounds[name];
+                sound.currentTime = 0;
+                sound.play();
             }
 
             initializeGameState() {
@@ -36,6 +53,8 @@ class RouletteGame {
                     chamber: 1, // Always 1-6, chamber to be fired next
                     bulletChamber: 1,
                     rotation: 0,
+                    hasSpun: false, // the long spin happens once per game
+                    cylinderReady: false, // true once that spin has settled
                     gameOver: false,
                     scores: {
                         human: 0,
@@ -43,156 +62,202 @@ class RouletteGame {
                     }
                 };
 
-                this.messages = [
-                    "Lucky escape!",
-                    "Still breathing...",
-                    "Close call!",
-                    "You survive... for now",
-                    "The chamber was empty",
-                    "Living on the edge"
-                ];
-                
-                this.waitingMessages = [
-                    "Waiting for the bullet...",
-                    "Holding my breath...",
-                    "Is it my turn?",
-                    "Feeling lucky...",
-                    "The tension is real...",
-                    "What will happen next?",
-                    "Sweating Bullets..."
-                ];
+                // Both pools are keyed by how many chambers are still unfired:
+                // fewer chambers left means a worse chance, so the tone escalates.
+                this.messages = {
+                    calm: [
+                        "Lucky escape!",
+                        "Barely worth flinching.",
+                        "The chamber was empty",
+                        "Still breathing..."
+                    ],
+                    uneasy: [
+                        "That one felt close.",
+                        "My hands aren't steady anymore.",
+                        "Close call!",
+                        "You survive... for now"
+                    ],
+                    scared: [
+                        "I can't keep doing this.",
+                        "My heart is going to give out first.",
+                        "That was a coin flip. A COIN FLIP."
+                    ],
+                    dread: [
+                        "It's the last one. It has to be the last one.",
+                        "There's nowhere left for it to hide."
+                    ]
+                };
+
+                this.waitingMessages = {
+                    calm: [
+                        "Feeling lucky...",
+                        "Is it my turn?",
+                        "What will happen next?"
+                    ],
+                    uneasy: [
+                        "Waiting for the bullet...",
+                        "The tension is real...",
+                        "Sweating bullets..."
+                    ],
+                    scared: [
+                        "Holding my breath...",
+                        "Please, not this one.",
+                        "I don't want to look."
+                    ],
+                    dread: [
+                        "This is it. This is how it ends.",
+                        "No luck left to borrow."
+                    ]
+                };
             }
 
             setupEventListeners() {
-                this.elements.spinButton.addEventListener('click', () => {
-                    if (!this.hasStarted) {
-                        this.hasStarted = true;
-                        this.sounds.spin.currentTime = 0;
-                        this.sounds.spin.play();
-                    }
-                    this.spin();
-                });
-                this.elements.resetButton.addEventListener('click', () => this.resetGame(true));
+                this.elements.spinButton.addEventListener('click', () => this.takeTurn(true));
+                this.elements.resetButton.addEventListener('click', () => this.resetGame());
+            }
+
+            // Chambers still unfired, including the one about to fire.
+            remainingChambers() {
+                return CHAMBER_COUNT + 1 - this.state.chamber;
+            }
+
+            pickMessage(pool) {
+                const remaining = this.remainingChambers();
+                let tier;
+                if (remaining >= 5) {
+                    tier = pool.calm;
+                } else if (remaining >= 3) {
+                    tier = pool.uneasy;
+                } else if (remaining === 2) {
+                    tier = pool.scared;
+                } else {
+                    tier = pool.dread;
+                }
+                return tier[Math.floor(Math.random() * tier.length)];
             }
 
             updateOdds() {
-                const remainingChambers = 6 - this.state.chamber;
-                this.elements.odds.textContent = 
-                    `Probability of survival: ${remainingChambers}/6`;
+                if (this.state.gameOver) {
+                    this.elements.odds.textContent =
+                        `The bullet was in chamber ${this.state.bulletChamber}`;
+                    return;
+                }
+                // Exactly one live round hides among the chambers nobody has fired yet,
+                // so surviving this pull is (remaining - 1) / remaining.
+                const remaining = this.remainingChambers();
+                const survive = remaining - 1;
+                const pct = Math.round((survive / remaining) * 100);
+                const noun = remaining === 1 ? 'chamber' : 'chambers';
+                this.elements.odds.textContent =
+                    `1 live round · ${remaining} ${noun} left · Survival: ${survive}/${remaining} (${pct}%)`;
             }
 
-            async spin() {
+            async takeTurn(isPlayer) {
                 if (this.state.gameOver) return;
 
                 this.elements.spinButton.disabled = true;
-                this.elements.waiting.textContent = this.waitingMessages[Math.floor(Math.random() * this.waitingMessages.length)];
+                this.elements.spinButton.textContent = "Wait...";
+                this.elements.waiting.textContent = this.pickMessage(this.waitingMessages);
                 this.elements.waiting.style.display = "block";
-                this.elements.result.textContent = "";
+                this.elements.result.textContent = isPlayer ? "" : "Computer's turn...";
                 document.body.classList.remove("bg-success", "bg-danger");
 
+                if (!isPlayer) {
+                    this.playSound('take');
+                }
+
                 // Only play heartbeat for suspense
-                this.sounds.heartbeat.play();
+                this.playSound('heartbeat');
 
-                await this.animateSpinAndWait();
+                // The cylinder is spun once at the start of the game; every pull after
+                // that just indexes it forward by a single chamber. The rotation plays
+                // out inside the turn, so the suspense fills whatever time is left.
+                if (this.state.hasSpun) {
+                    this.advanceCylinder();
+                } else {
+                    this.initialSpin();
+                }
 
-                await new Promise(resolve => setTimeout(resolve, 4000));
+                await new Promise(resolve => setTimeout(resolve, TURN_MS));
 
                 this.sounds.heartbeat.pause();
                 this.sounds.heartbeat.currentTime = 0;
 
+                this.elements.waiting.style.display = "none";
+
                 if (this.state.chamber === this.state.bulletChamber) {
-                    this.handleLoss();
+                    this.handleLoss(isPlayer);
                 } else {
-                    this.handleSurvival();
+                    this.handleSurvival(isPlayer);
                 }
             }
 
-            async animateSpinAndWait() {
-                // Always advance to the next matching chamber in the same direction.
+            initialSpin() {
+                // Randomizing spin: several full turns, landing aligned to the chamber
+                // that is about to fire.
                 const fullSpins = 4;
-                const targetOffset = (-60 * (this.state.chamber - 1) + 360) % 360;
+                const targetOffset = (-CHAMBER_ANGLE * (this.state.chamber - 1) + 360) % 360;
                 const currentOffset = ((this.state.rotation % 360) + 360) % 360;
                 const forwardOffset = (targetOffset - currentOffset + 360) % 360;
                 this.state.rotation += (360 * fullSpins) + forwardOffset;
 
-                // Set transition duration to 3s for smooth deceleration
-                this.elements.revolver.style.transition = 'transform 3s cubic-bezier(0.33, 1, 0.68, 1)';
+                this.elements.revolver.style.transition = `transform ${SPIN_MS}ms cubic-bezier(0.33, 1, 0.68, 1)`;
                 this.elements.revolver.style.setProperty('--rotation', `${this.state.rotation}deg`);
 
-                // Wait for the spin to finish (match spin.mp3 duration)
-                return new Promise(resolve => setTimeout(resolve, 3000));
+                this.playSound('spin');
+                this.state.hasSpun = true;
+
+                // The live chamber stays dark until the cylinder stops moving - lighting
+                // it up mid-spin would give the position away before it is settled.
+                setTimeout(() => {
+                    if (!this.state.hasSpun) return; // a reset cancelled this spin
+                    this.state.cylinderReady = true;
+                    this.updateChamberVisuals();
+                }, SPIN_MS);
             }
 
-            handleLoss() {
-                this.elements.result.textContent = "BANG! Game Over!";
-                this.sounds.gunshot.play();
+            advanceCylinder() {
+                // One notch, so the next chamber lines up under the hammer.
+                this.state.rotation -= CHAMBER_ANGLE;
+
+                this.elements.revolver.style.transition = `transform ${STEP_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+                this.elements.revolver.style.setProperty('--rotation', `${this.state.rotation}deg`);
+            }
+
+            handleLoss(isPlayer) {
+                this.elements.result.textContent = isPlayer
+                    ? "BANG! Game Over!"
+                    : "BANG! Computer loses!";
+                this.playSound('gunshot');
                 document.body.classList.add("bg-danger");
-                this.state.scores.computer++;
-                this.elements.computerScore.textContent = this.state.scores.computer;
-                this.endGame();
-            }
 
-            handleSurvival() {
-                this.sounds.click.play();
-                this.elements.result.textContent = 
-                    this.messages[Math.floor(Math.random() * this.messages.length)];
-                document.body.classList.add("bg-success");
-                this.elements.spinButton.textContent = "Wait...";
-                setTimeout(() => this.computerTurn(), 2000);
-            }
-
-            async computerTurn() {
-                if (this.state.gameOver) return;
-
-                // Optional: play take sound at the start of computer's turn
-                this.sounds.take.play();
-
-                this.elements.spinButton.disabled = true;
-                this.elements.spinButton.textContent = "Wait...";
-                this.elements.waiting.textContent = this.waitingMessages[Math.floor(Math.random() * this.waitingMessages.length)];
-                this.elements.waiting.style.display = "block";
-                this.elements.result.textContent = "Computer's turn...";
-                document.body.classList.remove("bg-success", "bg-danger");
-
-                // Only play heartbeat for suspense
-                this.sounds.heartbeat.play();
-
-                this.state.chamber = this.nextChamber(this.state.chamber);
-
-                await this.animateSpinAndWait();
-
-                await new Promise(resolve => setTimeout(resolve, 4000));
-
-                this.sounds.heartbeat.pause();
-                this.sounds.heartbeat.currentTime = 0;
-
-                if (this.state.chamber === this.state.bulletChamber) {
-                    this.handleComputerLoss();
+                if (isPlayer) {
+                    this.state.scores.computer++;
+                    this.elements.computerScore.textContent = this.state.scores.computer;
                 } else {
-                    this.handleComputerSurvival();
+                    this.state.scores.human++;
+                    this.elements.humanScore.textContent = this.state.scores.human;
                 }
-            }
 
-            handleComputerLoss() {
-                this.elements.result.textContent = "BANG! Computer loses!";
-                this.sounds.gunshot.play();
-                document.body.classList.add("bg-danger");
-                this.state.scores.human++;
-                this.elements.humanScore.textContent = this.state.scores.human;
                 this.endGame();
             }
 
-            handleComputerSurvival() {
-                this.sounds.click.play(); // <-- Play click when computer survives
-                this.updateChamberVisuals();
-                this.elements.result.textContent = 
-                    this.messages[Math.floor(Math.random() * this.messages.length)];
+            handleSurvival(isPlayer) {
+                this.playSound('click');
+                this.elements.result.textContent = this.pickMessage(this.messages);
                 document.body.classList.add("bg-success");
-                this.elements.spinButton.textContent = "Pull the Trigger";
-                this.elements.spinButton.disabled = false;
-                // Advance to next chamber for player's turn
+
+                // Advance to the chamber the next pull will fire.
                 this.state.chamber = this.nextChamber(this.state.chamber);
+                this.updateChamberVisuals();
                 this.updateOdds();
+
+                if (isPlayer) {
+                    setTimeout(() => this.takeTurn(false), 2000);
+                } else {
+                    this.elements.spinButton.textContent = "Pull the Trigger";
+                    this.elements.spinButton.disabled = false;
+                }
             }
 
             updateChamberVisuals() {
@@ -208,44 +273,50 @@ class RouletteGame {
                         firedChamber.classList.add('empty');
                     }
                 }
-                // Mark the current chamber as active
-                const bulletChamber = document.querySelector(`.chamber[data-chamber="${this.state.chamber}"]`);
-                if (bulletChamber) {
-                    bulletChamber.classList.add('active');
+                // Mark the chamber under the hammer, but only once the opening spin
+                // has settled - before that the cylinder position is meant to be unknown.
+                if (!this.state.cylinderReady) return;
+                const activeChamber = document.querySelector(`.chamber[data-chamber="${this.state.chamber}"]`);
+                if (activeChamber) {
+                    activeChamber.classList.add('active');
                 }
             }
 
             nextChamber(current) {
                 // 1-6, wraps around
-                return current % 6 + 1;
+                return current % CHAMBER_COUNT + 1;
             }
 
             endGame() {
                 this.state.gameOver = true;
                 this.elements.spinButton.style.display = "none";
                 this.elements.resetButton.style.display = "inline-block";
+                this.updateChamberVisuals();
+                this.updateOdds();
             }
 
-            resetGame(playSpin = true) {
+            resetGame() {
                 this.state.chamber = 1;
-                this.state.bulletChamber = Math.floor(Math.random() * 6) + 1;
+                this.state.bulletChamber = Math.floor(Math.random() * CHAMBER_COUNT) + 1;
                 this.state.rotation = 0;
+                this.state.hasSpun = false;
+                this.state.cylinderReady = false;
                 this.state.gameOver = false;
 
                 this.elements.result.textContent = "";
+                this.elements.waiting.style.display = "none";
                 document.body.classList.remove("bg-success", "bg-danger");
                 this.elements.spinButton.style.display = "inline-block";
                 this.elements.resetButton.style.display = "none";
                 this.elements.spinButton.disabled = false;
                 this.elements.spinButton.textContent = "Pull the Trigger";
 
-                // Only play spin sound if not the very first load
-                if (playSpin) {
-                    this.sounds.spin.currentTime = 0;
-                    this.sounds.spin.play();
-                }
-
+                // Snap back to zero without animating the cylinder backwards.
+                this.elements.revolver.style.transition = 'none';
                 this.elements.revolver.style.setProperty('--rotation', '0deg');
+                void this.elements.revolver.offsetWidth;
+                this.elements.revolver.style.transition = '';
+
                 this.updateChamberVisuals();
                 this.updateOdds();
             }

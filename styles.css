@@ -4,8 +4,11 @@
     --danger-color: #ffcccb;
     --success-color: #90ee90;
     --disabled-color: #cccccc;
-    --chamber-color: #444;
-    --pin-color: #666;
+    --chamber-color: #b9bdc4;   /* unfired: light grey, still loaded */
+    --chamber-fired: #050505;   /* fired: a black hole in the cylinder */
+    --chamber-border: #6f747c;
+    --live-color: #e01b1b;
+    --pin-color: #565b62;
 }
 
 body {
@@ -98,10 +101,12 @@ body {
     height: 40px;
     background: var(--chamber-color);
     border-radius: 50%;
-    border: 2px solid #333;
+    border: 2px solid var(--chamber-border);
     left: 50%;
     top: 50%;
     margin: -20px 0 0 -20px;
+    /* Never transition `transform` here - the chamber--N rules use it for layout. */
+    transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 .chamber--1 { transform: rotate(0deg) translateY(-80px); }
@@ -124,13 +129,19 @@ body {
     z-index: 1;
 }
 
+/* Under the hammer. Only applied once the opening spin has settled. */
 .chamber.active {
-    background: var(--pin-color);
-    box-shadow: inset 0 0 10px rgba(255, 0, 0, 0.5);
+    background: var(--chamber-color);
+    border-color: var(--live-color);
+    box-shadow: inset 0 0 12px rgba(224, 27, 27, 0.9),
+                0 0 14px rgba(224, 27, 27, 0.55);
 }
 
+/* Already fired, and known empty. */
 .chamber.empty {
-    background: #000000;
+    background: var(--chamber-fired);
+    border-color: #15171a;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.95);
 }
 
 .bg-success { background-color: var(--success-color); }

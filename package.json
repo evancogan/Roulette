@@ -1,0 +1,33 @@
+{
+  "name": "russian-roulette-game",
+  "version": "1.0.0",
+  "description": "Russian Roulette Game",
+  "main": "main.js",
+  "author": "Evan J. Cogan",
+  "license": "ISC",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.evancogan.roulette",
+    "productName": "Russian Roulette",
+    "files": [
+      "index.html",
+      "script.js",
+      "styles.css",
+      "main.js",
+      "*.mp3"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "directories": {
+      "output": "dist_build"
+    }
+  }
+}

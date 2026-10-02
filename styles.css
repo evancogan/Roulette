@@ -46,10 +46,6 @@ body {
     background-color: var(--secondary-color);
 }
 
-.game-info {
-    margin: 20px 0;
-}
-
 .result {
     font-size: 24px;
     margin: 20px 0;
@@ -78,9 +74,7 @@ body {
     font-size: 18px;
 }
 
-/* Revolver Styles */
 .revolver {
-    perspective: 1000px;
     margin: 40px auto;
     width: 200px;
     height: 200px;
@@ -90,8 +84,6 @@ body {
     width: 100%;
     height: 100%;
     position: relative;
-    transform-style: preserve-3d;
-    transition: transform 3s cubic-bezier(0.33, 1, 0.68, 1);
     transform: rotate(var(--rotation, 0deg));
 }
 
@@ -105,16 +97,10 @@ body {
     left: 50%;
     top: 50%;
     margin: -20px 0 0 -20px;
-    /* Never transition `transform` here - the chamber--N rules use it for layout. */
+    transform: rotate(calc(var(--i) * 60deg)) translateY(-80px);
+    /* Never transition `transform` here: it positions each chamber. */
     transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
-
-.chamber--1 { transform: rotate(0deg) translateY(-80px); }
-.chamber--2 { transform: rotate(60deg) translateY(-80px); }
-.chamber--3 { transform: rotate(120deg) translateY(-80px); }
-.chamber--4 { transform: rotate(180deg) translateY(-80px); }
-.chamber--5 { transform: rotate(240deg) translateY(-80px); }
-.chamber--6 { transform: rotate(300deg) translateY(-80px); }
 
 .center-pin {
     position: absolute;

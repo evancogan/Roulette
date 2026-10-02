@@ -26,6 +26,7 @@ class RouletteGame {
                     humanScore: document.getElementById('humanScore'),
                     computerScore: document.getElementById('computerScore'),
                     revolver: document.querySelector('.revolver__cylinder'),
+                    chambers: document.querySelectorAll('.chamber'),
                     blackout: document.getElementById('blackout')
                 };
             }
@@ -53,31 +54,17 @@ class RouletteGame {
             }
 
             initializeGameState() {
+                // Everything else in the state is set by resetGame() at the start of each game.
                 this.state = {
-                    chamber: 1, // Always 1-6, chamber to be fired next
-                    bulletChamber: 1,
-                    rotation: 0,
-                    playerTurn: true, // who fires next; decided by a coin toss each game
-                    hasSpun: false, // the long spin happens once per game
-                    cylinderReady: false, // true once that spin has settled
-                    gameOver: false,
                     scores: {
                         human: 0,
                         computer: 0
                     }
                 };
 
-                // My turns are narrated from the inside, my opponent's from the outside.
-                // `suspense` plays during the wait, `payoff` when the hammer falls on an
-                // empty chamber. Both are keyed by chambers still unfired, so the tone
-                // tracks the odds: 6 is bravado, 1 is a certainty.
-                //
-                // Three deliberate shapes here. There is nothing written for a death - the
-                // gunshot carries that alone. `payoff` stops at 2, because surviving with
-                // one chamber left is impossible: the bullet has to be in it, so that
-                // hopeless beat lives in `suspense` at 1, before the trigger is pulled.
-                // And surviving at 2 is not relief but victory - it hands the last chamber
-                // to the other player - so those lines turn cruel.
+                // Lines are keyed by chambers left (6 down to 1). Player lines are first person,
+                // computer lines are observed. No death lines: the gunshot carries it. `payoff` stops
+                // at 2, since nobody survives the last chamber, and at 2 surviving wins, so those lines are cruel.
                 this.flavor = {
                     player: {
                         suspense: {
@@ -225,7 +212,7 @@ class RouletteGame {
                     }
                 };
 
-                this.lastLine = null; // so the same line never lands twice running
+                this.lastLine = null;
             }
 
             setupEventListeners() {
@@ -259,10 +246,7 @@ class RouletteGame {
             }
 
             pickLine(isPlayer, moment) {
-                const pool = this.flavor[isPlayer ? 'player' : 'computer'][moment];
-                // `payoff` has no entry for one chamber left - nobody survives that - so
-                // fall back to the tensest pool that does exist rather than blowing up.
-                const lines = pool[this.remainingChambers()] || pool[2];
+                const lines = this.flavor[isPlayer ? 'player' : 'computer'][moment][this.remainingChambers()];
                 // Never land the same line twice running.
                 const choices = lines.length > 1
                     ? lines.filter(line => line !== this.lastLine)
@@ -302,12 +286,9 @@ class RouletteGame {
                     this.playSound('take');
                 }
 
-                // Only play heartbeat for suspense
                 this.playSound('heartbeat');
 
-                // The cylinder is spun once at the start of the game; every pull after
-                // that just indexes it forward by a single chamber. The rotation plays
-                // out inside the turn, so the suspense fills whatever time is left.
+                // One long spin per game; every later pull indexes a single chamber.
                 if (this.state.hasSpun) {
                     this.advanceCylinder();
                 } else {
@@ -329,13 +310,8 @@ class RouletteGame {
             }
 
             initialSpin() {
-                // Randomizing spin: several full turns, landing aligned to the chamber
-                // that is about to fire.
-                const fullSpins = 4;
-                const targetOffset = (-CHAMBER_ANGLE * (this.state.chamber - 1) + 360) % 360;
-                const currentOffset = ((this.state.rotation % 360) + 360) % 360;
-                const forwardOffset = (targetOffset - currentOffset + 360) % 360;
-                this.state.rotation += (360 * fullSpins) + forwardOffset;
+                // Four full turns, landing back on chamber 1, the first to fire.
+                this.state.rotation = 360 * 4;
 
                 this.elements.revolver.style.transition = `transform ${SPIN_MS}ms cubic-bezier(0.33, 1, 0.68, 1)`;
                 this.elements.revolver.style.setProperty('--rotation', `${this.state.rotation}deg`);
@@ -343,8 +319,7 @@ class RouletteGame {
                 this.playSound('spin');
                 this.state.hasSpun = true;
 
-                // The live chamber stays dark until the cylinder stops moving - lighting
-                // it up mid-spin would give the position away before it is settled.
+                // Light the live chamber only once the spin stops, or it gives the position away.
                 setTimeout(() => {
                     if (!this.state.hasSpun) return; // a reset cancelled this spin
                     this.state.cylinderReady = true;
@@ -353,7 +328,6 @@ class RouletteGame {
             }
 
             advanceCylinder() {
-                // One notch, so the next chamber lines up under the hammer.
                 this.state.rotation -= CHAMBER_ANGLE;
 
                 this.elements.revolver.style.transition = `transform ${STEP_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
@@ -385,13 +359,11 @@ class RouletteGame {
                 this.playSound('click');
                 this.elements.result.textContent = this.pickLine(isPlayer, 'payoff');
 
-                // Advance to the chamber the next pull will fire.
-                this.state.chamber = this.nextChamber(this.state.chamber);
+                this.state.chamber++;
                 this.setBackground(isPlayer ? 'safe' : 'neutral');
                 this.updateChamberVisuals();
                 this.updateOdds();
 
-                // The gun goes to whoever didn't just fire.
                 this.state.playerTurn = !isPlayer;
                 if (this.state.playerTurn) {
                     this.elements.spinButton.textContent = "Pull the Trigger";
@@ -402,30 +374,11 @@ class RouletteGame {
             }
 
             updateChamberVisuals() {
-                // Clear all chambers
-                document.querySelectorAll('.chamber').forEach(chamber => {
-                    chamber.classList.remove('active', 'empty');
+                const fired = this.state.gameOver ? this.state.bulletChamber : this.state.chamber - 1;
+                this.elements.chambers.forEach((el, i) => {
+                    el.classList.toggle('empty', i < fired);
+                    el.classList.toggle('active', this.state.cylinderReady && i + 1 === this.state.chamber);
                 });
-                // If game over, mark all chambers up to and including the bullet chamber as empty
-                let last = this.state.gameOver ? this.state.bulletChamber : this.state.chamber - 1;
-                for (let i = 1; i <= last; i++) {
-                    const firedChamber = document.querySelector(`.chamber[data-chamber="${i}"]`);
-                    if (firedChamber) {
-                        firedChamber.classList.add('empty');
-                    }
-                }
-                // Mark the chamber under the hammer, but only once the opening spin
-                // has settled - before that the cylinder position is meant to be unknown.
-                if (!this.state.cylinderReady) return;
-                const activeChamber = document.querySelector(`.chamber[data-chamber="${this.state.chamber}"]`);
-                if (activeChamber) {
-                    activeChamber.classList.add('active');
-                }
-            }
-
-            nextChamber(current) {
-                // 1-6, wraps around
-                return current % CHAMBER_COUNT + 1;
             }
 
             endGame() {
@@ -437,13 +390,13 @@ class RouletteGame {
             }
 
             resetGame() {
-                this.state.chamber = 1;
+                this.state.chamber = 1; // 1-6, the chamber to be fired next
                 this.state.bulletChamber = Math.floor(Math.random() * CHAMBER_COUNT) + 1;
                 this.state.rotation = 0;
-                this.state.hasSpun = false;
-                this.state.cylinderReady = false;
+                this.state.hasSpun = false; // the long spin happens once per game
+                this.state.cylinderReady = false; // true once that spin has settled
                 this.state.gameOver = false;
-                this.state.playerTurn = Math.random() < 0.5;
+                this.state.playerTurn = Math.random() < 0.5; // who fires next
 
                 this.elements.result.textContent = "";
                 this.elements.waiting.style.display = "none";
@@ -452,8 +405,7 @@ class RouletteGame {
                 this.elements.spinButton.style.display = "inline-block";
                 this.elements.resetButton.style.display = "none";
                 this.elements.spinButton.disabled = false;
-                // Even when they go first the player has to press something: browsers mute
-                // audio until a gesture, and the opening spin needs its sound.
+                // Browsers block audio until a click, so the player always presses first.
                 this.elements.spinButton.textContent = this.state.playerTurn
                     ? "Pull the Trigger"
                     : "Hand Over the Gun";
@@ -469,5 +421,4 @@ class RouletteGame {
             }
         }
 
-        // Initialize the game
         const game = new RouletteGame();

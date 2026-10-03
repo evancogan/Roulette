@@ -4,7 +4,7 @@
   "description": "Russian Roulette Game",
   "main": "main.js",
   "author": "Evan J. Cogan",
-  "license": "ISC",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder"

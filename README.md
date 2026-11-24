@@ -1,5 +1,7 @@
 # Russian Roulette
 
+![Release](https://img.shields.io/github/v/release/evancogan/Roulette?include_prereleases) ![License](https://img.shields.io/github/license/evancogan/Roulette) ![Electron](https://img.shields.io/badge/Electron-33-47848F?logo=electron&logoColor=white)
+
 The game of Russian Roulette- a game of chance with a dark twist. Players take turns pulling the trigger of a revolver with one bullet in the chamber, hoping to avoid being the one who fires the fatal shot.
 
 <img width="410" height="430" alt="Russian Roulette game screen" src="https://github.com/user-attachments/assets/af59f46c-6cda-40dc-86c0-8f89919f0f6e" />
